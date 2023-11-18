@@ -1,0 +1,103 @@
+﻿@{
+    ViewData["Title"] = "Chat";
+}
+
+<h2>Chat & File Sharing</h2>
+<div id="user" class="col-6 offset-3" style="display:none">
+    <div class="input-group mb-3">
+        <input type="text" id="u" placeholder="Username..." class="form-control" />
+        <button id="join" type="button" class="btn btn-primary btn-sm">Join</button>
+    </div>
+</div>
+
+<div class="row" id="chat" style="display:none">
+    <div class="col-3">
+        <h4>Connected user</h4>
+        <ul class="list-group" id="ulist"></ul>
+    </div>
+    <div class="col-9">
+        <div class="input-group">
+            <input type="text" id="m" class="form-control" placeholder="message..." aria-label="message">
+            <button id="send" class="btn btn-outline-secondary" type="button">Send</button>
+            <button id="upload" class="btn btn-outline-secondary" type="button">Browse</button>
+        </div>
+
+        <h4>Messages</h4>
+        <div>
+            <ul id="messages" class="list-group"></ul>
+        </div>
+
+        <h4>File shares</h4>
+        <div id="pics" class="border-1 rounded-1">
+        </div>
+    </div>
+    <input type="file" id="pic" style="display:none" accept=".jpg,.gif,.png,.jpeg" />
+</div>
+
+@section styles {
+    <style>
+        #messages, #pics {
+            min-height: 4rem;
+        }
+
+        #pics {
+            display: grid;
+            grid-template-columns: 20% 20% 20% 20%;
+            justify-content: flex-start;
+            gap: 10px;
+        }
+
+        .box {
+            padding: inherit;
+            margin: 0;
+            width: 200px;
+        }
+
+            .box img {
+                width: 200px;
+                height: 200px;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+            }
+    </style>
+}
+
+@section scripts {
+    <script src="~/lib/microsoft-signalr/signalr.js"></script>
+    <script src="~/lib/jquery/dist/jquery.js"></script>
+    <script>
+        const con = new signalR.HubConnectionBuilder().withUrl("/messageHub").build();
+
+        con.on("message", msg => $("#messages").append(`<li>${msg.sender}: ${msg.message}</li>`));
+
+        con.on("uploaded", data => $('#pics').append(
+            `<div>
+                                <img src="/Uploads/${data.file}"/>
+                                <div>Shared by ${data.sender}</div>
+                                <div><a href="/Uploads/${data.file}" target="_blank">Download</a></div>
+                            </div>`
+        ));
+
+        con.on("userList", users => {
+            users.forEach(user => $("#ulist").append(`<li>${user}</li>`));
+            $("#user").hide();
+            $("#chat").show();
+        });
+
+        con.start().then(() => {
+            $("#user").show();
+            $("#join").click(() => con.invoke("JoinAsync", $("#u").val()));
+            $("#send").click(() => {
+                con.invoke("SendAllAsync", $("#m").val());
+                $("#m").val('');
+            });
+            $("#upload").click(() => $("#pic").trigger('click'));
+            $("#pic").change(() => {
+                const file = document.getElementById("pic").files[0];
+                const reader = new FileReader();
+                reader.onload = () => con.invoke("UploadAsync", { Filename: file.name, Content: reader.result });
+                reader.readAsDataURL(file);
+            });
+        });
+    </script>
+}
